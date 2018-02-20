@@ -1,0 +1,381 @@
+#-*- coding: utf-8 -*-
+from selenium import webdriver
+from page_objects import PageElement, PageObject
+from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import NoSuchElementException
+from urllib.request import urlretrieve
+from pandas import DataFrame, Series
+import pandas as pd
+import logging, re, json, sys, time, os
+
+
+
+logging.getLogger("selenium").setLevel(logging.INFO)
+FORMAT = "[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
+logging.basicConfig(format=FORMAT)
+logging.getLogger("naverDN_logger").setLevel(logging.DEBUG)
+logger = logging.getLogger('naverDN_logger')
+
+
+class LoginPage(PageObject):
+    username = PageElement(id_='id')
+    password = PageElement(name='pw')
+    login = PageElement(class_name='btn_global')
+
+
+class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
+    def __init__(self, browser, _cafe_name ):
+        '''
+        browser: browser Name : ie, Firefox, chrome
+        CNF_JSON_OBJ: site1['cafe_name']['menuID']['searchType']['searchKeyword']
+        '''
+        self.BROWSER = browser
+        if browser.lower() == "ie":
+            webdriver.Ie.__init__(self)
+        elif browser.lower() == "chrome":
+            webdriver.Chrome.__init__(self)
+        elif browser.lower() == "phantomjs":
+            webdriver.PhantomJS.__init__(self)
+        else:
+            webdriver.Firefox.__init__(self)
+
+        #self.implicitly_wait(5)  
+        #        self.logger = logger.getLogger('Naver dn logger')
+        self.maximize_window() 
+        self.CAFE_NAME = _cafe_name
+        self.Dn = naver_dn()
+        logger.info('naver_dn 클래스생성')
+        
+
+
+        self.log_in('minuxx','minuxher') 
+
+        self.get('http://cafe.naver.com/'+ _cafe_name)
+        self.lst_menu = self.get_cafe_menu()
+
+
+    def __del__(self):
+        logging.warning(" CLASS OJBECT KILLED")
+        os.system('pkill -f %s'% self.BROWSER)
+
+
+    def log_in(self, _id, _pwd):
+
+        self.get('https://nid.naver.com/nidlogin.login')
+        self.page = LoginPage(self)
+        self.page.username = 'minuxx'
+        self.page.password = 'minuxher'
+        self.page.login.click()
+        self.find_element_by_xpath("//form[@id='frmNIDLogin']/fieldset/span[1]/a").click()
+        self.find_element_by_xpath("//div[@id='login_maintain']/span[1]/a").click()
+        logger.info('로그인 성공')
+
+    def get_cafe_menu(self):
+        '''
+        Get the name, address of MENU in cafe as DataFrame format 
+        '''
+        _b =self.find_elements_by_xpath("//div[@id='cafe-menu']/div[@class='box-g-m']/ul/li/a")
+        _lst_menu = []
+        for c, i in enumerate(_b):
+                _href= i.get_attribute('href')
+                _menuid = re.search('menuid=([0-9]*)', _href)
+                if _menuid == None:
+                        _menuid = None
+                else:
+                        _menuid = _menuid.group(1)
+                _lst_menu.append((c, i.text, _href, _menuid))
+
+        labels =['Num','name_menu','addr_menu','menu_id']
+        _df = pd.DataFrame.from_records(_lst_menu, columns= labels)
+        
+        return _df 
+
+    def goto_cf_menu(self,_kw):
+        self.switch_to_default_content()
+        _df = self.get_cafe_menu()
+        _name = _df[_df['name_menu'].str.contains(_kw)]['name_menu'].tolist()[0]
+        _addr = _df[_df['name_menu'].str.contains(_kw)]['addr_menu']
+        _menuid = _df[_df['name_menu'].str.contains(_kw)]['menu_id'].tolist()[0]
+
+        self.switch_to_default_content() 
+
+        if len(_addr) >1:
+            print("Duplicated Menu Name, Give me longer name")
+            sys.exit()
+        else:
+            self.get(_addr.tolist()[0])
+            logger.info("Moved to "+ self.where_ami('menu_name'))
+            return {'cf_name': _name, 'menu_id': _menuid}
+
+
+    def get_cafe_info(self):
+        '''
+            _id : cafe 번호
+            _name: cafe 이름
+            _addr: cafe base 주소
+        '''
+        self.switch_to.default_content()
+        _id = self.find_element_by_xpath("//div[@id='front-cafe']/a").get_attribute('href')
+        _id = re.search('clubid=([0-9]*)', _id).group(1)
+        _name = self.find_element_by_xpath("//head/title").text
+        _addr = re.search("http://cafe.naver.com/([\w]*)", self.current_url).group(0)
+        return {'cf_name': _name, 'cf_id': _id, 'cf_addr': _addr}
+
+
+
+    def get_lstArticles_currnet_page(self):
+        _lst=[]
+        self.switch_to.default_content()
+        _addr = self.get_cafe_info()['cf_addr']
+
+        self.switch_to.frame('cafe_main')
+        _f_chk_exist = lambda x : True  if len(x)!=0 else False
+        articles=self.find_elements_by_xpath("//form[@name='ArticleList']/table[@class='board-box']/tbody/tr[@align='center']")
+
+        for i in articles:
+#                self.switch_to.frame('cafe_main')
+                _t_addr=''
+                _num = i.find_element_by_xpath(".//td/span[@class='m-tcol-c list-count']").text
+                _title = i.find_element_by_xpath(".//td[@align='left']/span/span[@class='aaa']/a").text.strip()
+                _id = i.find_element_by_xpath(".//td[@class='p-nick']/a/span[@class='wordbreak']").text
+                _date = i.find_elements_by_xpath(".//td[@class='view-count m-tcol-c']")[0].text
+                _atch_file = _f_chk_exist(i.find_elements_by_xpath(".//input[@class='list-i-upload']") )
+                _t_addr = _addr+"/"+ _num 
+                _lst.append((_num, _title, _id, _date, _atch_file, _t_addr))
+
+        return _lst
+
+    def search_q(self,searchBy='3', keyword="", date="all"):
+            '''date: all, 1d, 1w, 1m, 6m, 1y, 2017-09-012017-12-10 searchBy = 1(전체), 3(작성자), 4(댓글내용), 5(댓글작성자) 
+            '''
+            _base_url = 'http://cafe.naver.com/ArticleSearchList.nhn?'
+            _clubID = self.where_ami('cafe_id')
+            _date = date
+            _searchBy = searchBy
+            _query= keyword
+            _defaultValue = '1'
+            _menuid= self.where_ami('menu_id')
+            _search_url = _base_url+'search.clubid='+_clubID+'&'\
+                                            +'search.searchdate='+ date+ '&'\
+                                            +'search.searchBy='+ searchBy +'&'\
+                                            +'search.query='+_query+'&'\
+                                            +'search.defaultValue='+_defaultValue+'&'\
+                                            +'search.menuid='+_menuid+'#'
+            logger.info(_search_url)
+            self.get(_search_url) 
+
+    def where_ami(self,_type=''):
+        '''
+        _type = cafe_name, menu_name, cafe_id, menu_id
+           게시판의 즐겨찾기에서 1차로 정보를 빼온다.
+           즐겨찾기가 없으면 여기저기서 줏어서 어째든 현재 열려진 페이지 정보를 알려준다
+        '''
+        if _type =="":
+                print('알고싶은 정보를 Argument 로 입력하세요')
+                print(' _type = cafe_name, menu_name, cafe_id, menu_id')
+                sys.exit()
+
+        self.switch_to_default_content()
+
+        self.switch_to_frame('cafe_main')
+
+        _t1 = self.find_elements_by_xpath("//div[@id='sub-tit']/h3/a[@id='favorite']")
+
+        if len(_t1) == 1:
+
+                _t1 = _t1[0]
+                _t1 = _t1.get_attribute('onclick')
+                _t2 = re.search(", ([0-9]*), ([0-9]*)\)", _t1)
+                _cafe_id = _t2.group(1)
+                _menu_id = _t2.group(2)
+                _menu_name = self.find_element_by_xpath("//div[@id='sub-tit']/h3").text
+                logger.info("즐겨찾기 있음")
+           
+        else: 
+                # 검색결과 화면에서 다시 검색할 때 동작한다. 이 전에 검색했던 게시판에서 다시 검색
+                logger.info("---즐겨찾기 없음")
+                self.switch_to_default_content()
+                _cafe_id = self.find_element_by_xpath("//div[@id='front-cafe']/a").get_attribute('href')
+                _cafe_id = re.search('clubid=([0-9]*)', _cafe_id).group(1)
+                self.switch_to.frame('cafe_main')
+                _menu_name = self.find_element_by_xpath("//div[@id='sub-tit']/h3").text
+                _menu_id = re.search("menuid=([0-9]*)", self.current_url).group(1)
+
+        self.switch_to_default_content()
+        _cafe_name = self.title.replace(_menu_name, "")
+        result = {'cafe_name':_cafe_name, 'cafe_id':_cafe_id,'menu_id':_menu_id, 'menu_name':_menu_name}
+
+        return result[_type]
+
+ 
+
+    def __isExist_Next_page__(self):
+        '''
+            move to Next page in iFrmae(id='cafe_main') if next page is available
+        '''
+        self.switch_to.default_content()
+        self.switch_to.frame('cafe_main')
+        _t =  self.find_elements_by_xpath("//table[@class='Nnavi']/tbody/tr/td[@class='on']/following-sibling::td/a")
+        if len(_t):
+
+                logger.debug('Next Page Exist')
+                return True
+
+        else:
+                logger.debug('Next Page dose not Exist')
+                return False
+
+    def __goTo_nextPage__(self):
+        try:
+            self.switch_to.default_content()
+            self.switch_to.frame('cafe_main')
+            _t = self.find_element_by_xpath("//div[@class='prev-next']/table[@class='Nnavi']/tbody/tr/td[@class='on']/following-sibling::td/a")
+            logger.debug(_t.text)
+            _t.click()
+        except:
+            self.get(self.current_url)
+            self.find_element_by_xpath("//div[@class='prev-next']/table[@class='Nnavi']/tbody/tr/td[@class='on']/following-sibling::td/a").click()
+
+
+    def get_lst_whole_bulletin(self):
+        labels =['Num','Title','Writer','Date','Atch_file','Addr']
+
+        _lst=[]
+        _lst = self.get_lstArticles_currnet_page()
+
+        #logger.debug(_lst)
+        while(self.__isExist_Next_page__()):
+                self.__goTo_nextPage__()
+                time.sleep(1) # 1초안주면 세션에러난다
+                _t = self.get_lstArticles_currnet_page()
+                _lst.extend(_t)
+        #        self.logger.debug(_lst)
+        _df = pd.DataFrame.from_records(_lst, columns= labels)
+        _df = _df.drop_duplicates()
+        print('{} are grabbed !'.format(len(_df)))
+        return _df 
+
+
+    def __get_download_file_nameNlinks__(self):
+        
+
+        '''
+        RETURN a list : [(file1, link1),(file2, link2), (file3,link3)...]
+        '''
+        _txt_dn_arrow = "//div[@class='atch_file_area']/a[@class='atch_view m-tcol-c']"
+        _txt_dn_box = "//div[@class='atch_file_area']/div[@id='attachLayer']"
+        _txt_cafe_main = "//div[@class='cafe_main']"
+        _txt_files = "//div[@id='attachLayer']/ul/li/span[@class='file_name']"
+        _txt_dn_links = "//div[@id='attachLayer']/ul/li/div[@id='attahc']/a[1]"
+        _txt_dn_close = "//div[@class='ly_atch_file']/a[@class='clse']"
+        self.switch_to.default_content()
+        self.switch_to.frame('cafe_main')
+
+        logging.info("getting nameNlinks")
+
+        time.sleep(1)
+        try:
+            dn_box = self.find_element_by_xpath(_txt_dn_box)
+        except NoSuchElementException :
+           logging.error('Download 게시물이 아닙니다.') 
+
+        self.find_element_by_xpath(_txt_dn_arrow).click()
+        time.sleep(1) 
+        _links_ = self.find_elements_by_xpath(_txt_dn_links)
+        _files_ = self.find_elements_by_xpath(_txt_files)
+        time.sleep(1)
+
+        _dn_links = [i.get_attribute('href') for i in _links_]
+        _dn_files = [i.text for i in _files_]
+
+        # Close download file box
+        self.find_element_by_xpath(_txt_dn_close).click()
+        time.sleep(1) 
+        return list(zip(_dn_links, _dn_files))
+
+    def __get_title__(self):
+        
+        
+        
+        '''게시물을 읽기 상태에서만 동작'''
+        self.switch_to.default_content()
+        self.switch_to.frame('cafe_main')
+        try:
+            _t = self.find_element_by_xpath("//span[@class='b m-tcol-c']").text.strip()
+
+        except NoSuchElementException :
+            print("게시물안이 아닙니다")
+        else:
+            return _t
+
+
+
+    def download_in_page(self, _folder ='./'):
+        _lst_files = self.__get_download_file_nameNlinks__()
+
+        if _folder =='./':
+            _folder = './'+ self.__get_title__()
+        else:
+            if not(_folder.endswith('/')):
+                _folder = _folder+'/'
+
+            _folder = _folder + self.__get_title__()
+
+        if os.path.exists(_folder):
+            pass
+        else:
+            os.makedirs(_folder)
+
+        for i in _lst_files:
+            try:
+                logging.info(i[0])
+                self.Dn.save(i[0], _folder+'/'+i[1])
+            except :
+                logging.error('Downloading error')
+
+
+    def __check_exists_by_xpath__(self, xpath):
+        try:
+            self.find_element_by_xpath(xpath)
+        except NoSuchElementException:
+            return False
+        return True
+
+class naver_dn:
+    def __init__(self):
+        pass
+
+    def _reporthook_(self, count, block_size, total_size):
+        global start_time
+        if count == 0:
+            start_time = time.time()
+            return
+        duration = time.time() - start_time
+        progress_size = (count * block_size)
+        speed = int(progress_size / (1024 * duration))
+        percent = int(count * block_size * 100 / total_size)
+        sys.stdout.write("\r...%d%%, %.2f MB, %d KB/s, %d seconds passed" %
+                        (percent, progess_size / (1024 * 1024), speed, duration))
+        sys.stdout.flush()
+
+    def save(self, url, path_filename):
+        print('{} is downloading '.format(path_filename))
+        urlretrieve(url, path_filename, self._reporthook_)
+
+
+
+if __name__ =="__main__":
+    import ipdb; ipdb.set_trace()
+
+    drv = naver_cafe('firefox', 'violin79')
+    drv.goto_cf_menu('악보') 
+    dwnld = naver_dn()
+    drv.search_q(keyword='nekoaria',date='1w')
+    a = drv.get_lst_whole_bulletin()
+    df = a[:2]
+    df = df[df.Atch_file == True]
+    for i in df.Addr.tolist():
+        drv.get(i)
+        drv.download_in_page('./haha')
+
+
