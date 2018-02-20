@@ -344,19 +344,20 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
 class naver_dn:
     def __init__(self):
         pass
-
     def _reporthook_(self, count, block_size, total_size):
+
         global start_time
         if count == 0:
             start_time = time.time()
             return
         duration = time.time() - start_time
-        progress_size = (count * block_size)
+        progress_size = int(count * block_size)
         speed = int(progress_size / (1024 * duration))
         percent = int(count * block_size * 100 / total_size)
         sys.stdout.write("\r...%d%%, %.2f MB, %d KB/s, %d seconds passed" %
-                        (percent, progess_size / (1024 * 1024), speed, duration))
+                        (percent, progress_size / (1024 * 1024), speed, duration))
         sys.stdout.flush()
+
 
     def save(self, url, path_filename):
         print('{} is downloading '.format(path_filename))
@@ -365,7 +366,6 @@ class naver_dn:
 
 
 if __name__ =="__main__":
-    import ipdb; ipdb.set_trace()
 
     drv = naver_cafe('firefox', 'violin79')
     drv.goto_cf_menu('악보') 
