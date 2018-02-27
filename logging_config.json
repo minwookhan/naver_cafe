@@ -1,0 +1,42 @@
+{
+        "version": 1,
+        "formatters": {
+            "default": {"format": "%(asctime)s - %(levelname)s - %(message)s", "datefmt": "%Y-%m-%d %H:%M:%S"}
+        },
+        "handlers": {
+            "console": {
+                "level": "DEBUG",
+                "class": "logging.StreamHandler",
+                "formatter": "default",
+                "stream": "ext://sys.stdout"
+            },
+            "file": {
+                "level": "DEBUG",
+                "class": "logging.handlers.RotatingFileHandler",
+                "formatter": "default",
+                "filename": "nave_cafe_.log",
+                "maxBytes": 1024,
+                "backupCount": 3
+            }
+           
+        },
+        "loggers": {
+            "default": {
+                "level": "WARN",
+                "handlers": ["console", "file"],
+                "propagate": 0 
+            },
+            "cls_logger":{
+                "level": "INFO",
+                "handlers": ["console"],
+                "propagate":0 
+            },
+            "info_only":{
+                "level":"INFO",
+                "handlers":["console"],
+                "propagate": 0 
+            }
+        },
+        "disable_existing_loggers": 0 
+
+    }
