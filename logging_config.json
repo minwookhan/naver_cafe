@@ -22,7 +22,7 @@
         },
         "loggers": {
             "default": {
-                "level": "WARN",
+                "level": "INFO",
                 "handlers": ["console", "file"],
                 "propagate": 0 
             },
