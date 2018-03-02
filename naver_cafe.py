@@ -1,4 +1,5 @@
 #-*- coding: utf-8 -*-
+#-*- coding: utf-8 -*-
 from selenium import webdriver
 from page_objects import PageElement, PageObject
 from selenium.webdriver.common.keys import Keys
@@ -13,8 +14,8 @@ import logging, re, json, sys, time, os
 
 
 logging.getLogger("selenium").setLevel(logging.INFO)
-FORMAT = "[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
-logging.basicConfig(format=FORMAT)
+#FORMAT = "[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
+#logging.basicConfig(format=FORMAT)
 # logging.getSelf.Logger("naverDN_logger").setLevel(logging.DEBUG)
 # self.logger = logging.getLogger('naverDN_logger')
 
@@ -125,6 +126,7 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
 
 
     def get_lstArticles_currnet_page(self):
+        todate= lambda x: time.strftime("%y.%m.%d") if bool(re.search("[/d]*:", x)) else x
         _lst=[]
         self.switch_to.default_content()
         _addr = self.get_cafe_info()['cf_addr']
@@ -139,7 +141,7 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
                 _num = i.find_element_by_xpath(".//td/span[@class='m-tcol-c list-count']").text
                 _title = i.find_element_by_xpath(".//td[@align='left']/span/span[@class='aaa']/a").text.strip()
                 _id = i.find_element_by_xpath(".//td[@class='p-nick']/a/span[@class='wordbreak']").text
-                _date = i.find_elements_by_xpath(".//td[@class='view-count m-tcol-c']")[0].text
+                _date = todate(i.find_elements_by_xpath(".//td[@class='view-count m-tcol-c']")[0].text)
                 _atch_file = _f_chk_exist(i.find_elements_by_xpath(".//input[@class='list-i-upload']") )
                 _t_addr = _addr+"/"+ _num 
                 _lst.append((_num, _title, _id, _date, _atch_file, _t_addr))
@@ -239,6 +241,9 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
 
 
     def get_lst_whole_bulletin(self):
+        ''''
+        retrun Whole bulletin information
+        '''
         labels =['Num','Title','Writer','Date','Atch_file','Addr']
 
         _lst=[]
@@ -253,7 +258,7 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
         #        self.self.logger.debug(_lst)
         _df = pd.DataFrame.from_records(_lst, columns= labels)
         _df = _df.drop_duplicates()
-        print('{} are grabbed !'.format(len(_df)))
+        print('{} scores are grabbed !'.format(len(_df)))
         return _df 
 
 
@@ -294,6 +299,40 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
         time.sleep(1) 
         return list(zip(_dn_links, _dn_files))
 
+
+    def __insert_youtube_linksFile__(self, _fname):
+        '''
+        _fname: file_path and name
+        create youtube html file if exist or
+        do nothing
+        '''
+        self.switch_to.default_content()
+        self.switch_to.frame('cafe_main')
+        _path = "//iframe[contains(@src, 'youtube.com')]"
+        _header = "<html><body>"
+        _footer = "</body></html>"
+#        import ipdb; ipdb.set_trace()
+
+        self.logger.debug("*** Youtube Linke called *****")
+        self.switch_to.default_content()
+        self.switch_to.frame('cafe_main')
+
+        if self.__check_exists_by_xpath__(_path):
+            self.logger.debug('Youtube links found')
+            _youtube_links = self.find_elements_by_xpath(_path)
+            _youtube_src = "<p>".join([x.get_attribute('outerHTML') for x in _youtube_links])
+            _youtube_src = _header + _youtube_src + _footer
+
+            with open(_fname, 'w') as f:
+                f.write(_youtube_src)
+                f.close()
+                
+            return True
+    
+        else :
+            return False
+
+
     def __get_title__(self):
         
         '''게시물을 읽기 상태에서만 동작'''
@@ -307,30 +346,50 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
         else:
             return _t
 
-
+    
 
     def download_in_page(self, _folder ='./'):
+        '''
+        Download all files in open page
+        and return the list of FILES and TITLE
+        '''
         _lst_files = self.__get_download_file_nameNlinks__()
+        _title_  = self.__get_title__()
+        self.switch_to_default_content()
+        self.switch_to.frame('cafe_main')
+        _date_ = self.find_element_by_xpath("//td[@class='m-tcol-c date']").text
+        _date_ = re.sub("\.", "-", re.search("[\d]{4}.[\d]{2}.[\d]{2}", _date_).group(0))
+
 
         if _folder =='./':
-            _folder = './'+ self.__get_title__()
+            _folder = './'+ _date_ + '  '+ _title_
         else:
             if not(_folder.endswith('/')):
-                _folder = _folder+'/'
 
-            _folder = _folder + self.__get_title__()
+                _folder = _folder+ '/' + _date_ + " " + _title_
 
         if os.path.exists(_folder):
             pass
         else:
             os.makedirs(_folder)
 
+        lst_down_success =[]
+        lst_down_fail = []
         for i in _lst_files:
             try:
-                logging.info(i[0])
-                self.Dn.save(i[0], _folder+'/'+i[1])
+                #i[0] : addr of file, i[1] : filename
+                self.logger.info(i[1])
+                self.Dn.save(i[0], _folder+'/'+ i[1])
+                self.__insert_youtube_linksFile__(_folder+'/'+  _title_+'.html')
+                lst_down_success.append(i[1])  #
+
             except :
-                logging.error('Downloading error')
+                lst_down_fail.append(i[1])
+                logging.error('\nDownloading error')
+                return lst_down_fail
+
+        lst_down_success.append(_title_)
+        return lst_down_success
 
 
     def __check_exists_by_xpath__(self, xpath):
@@ -339,6 +398,7 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
         except NoSuchElementException:
             return False
         return True
+
 
 class naver_dn:
     def __init__(self):
@@ -362,21 +422,5 @@ class naver_dn:
         print('{} is downloading '.format(path_filename))
         urlretrieve(url, path_filename, self._reporthook_)
 
-
-
-if __name__ =="__main__":
-
-    drv = naver_cafe('firefox', 'violin79')
-    drv.goto_cf_menu('악보') 
-
-    dwnld = naver_dn()
-    drv.search_q(keyword='nekoaria',date='1w')
-    a = drv.get_lst_whole_bulletin()
-    df = a[:2]
-    
-    df = df[df.Atch_file == True] # Filter bulletin with attached File
-    for i in df.Addr.tolist():
-        drv.get(i)
-        drv.download_in_page('./haha')
 
 

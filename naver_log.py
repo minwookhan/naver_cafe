@@ -29,11 +29,11 @@ class Log_filter(object):
 
 
 
-alog = configure_logger('info_only','logging_config.json')
-alog.debug('debug message!')
-alog.info('info message!')
-alog.warning('warning message')
-alog.error('error message')
-alog.warning('warning message')
-alog.critical('critical message')
+# alog = configure_logger('info_only','logging_config.json')
+# alog.debug('debug message!')
+# alog.info('info message!')
+# alog.warning('warning message')
+# alog.error('error message')
+# alog.warning('warning message')
+# alog.critical('critical message')
 

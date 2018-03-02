@@ -3,8 +3,8 @@
     "PASSWORD": "minuxher",
     "CAFE_ID": "violin79",
     "MENU_NAME": "악보",
-    "Q_type":"" ,
+    "Q_type":"3" ,
     "Q_kwd":"nekoaria",
-    "Q_date":"1w",
+    "Q_date":"1y",
     "DN_FOLDER":"./Nekoaria"
 }
