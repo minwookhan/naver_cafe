@@ -24,8 +24,6 @@ if __name__ =="__main__":
 help='create a cssfile')
     (options, args) = parser.parse_args()
 
-    # if  len(args) !=1:
-    #     parser.error('Wrong number of arguments')
     print(options)
 
     CONFIG = read_config(options.cnf_file)
