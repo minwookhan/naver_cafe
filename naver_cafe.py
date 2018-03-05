@@ -1,6 +1,7 @@
 #-*- coding: utf-8 -*-
 #-*- coding: utf-8 -*-
 from selenium import webdriver
+from selenium.webdriver.firefox.options import Options
 from page_objects import PageElement, PageObject
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import NoSuchElementException
@@ -32,7 +33,10 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
         browser: browser Name : ie, Firefox, chrome
         CNF_JSON_OBJ: site1['cafe_name']['menuID']['searchType']['searchKeyword']
         '''
+        options = Options()
+        options.set_headless()
         self.BROWSER = browser
+
         if browser.lower() == "ie":
             webdriver.Ie.__init__(self)
         elif browser.lower() == "chrome":
@@ -40,11 +44,12 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
         elif browser.lower() == "phantomjs":
             webdriver.PhantomJS.__init__(self)
         else:
+            #webdriver.Firefox.__init__(self, firefox_options=options)
             webdriver.Firefox.__init__(self)
 
         #self.implicitly_wait(5)  
         #        self.self.logger = logger.getLogger('Naver dn logger')
-        self.maximize_window() 
+        #self.maximize_window() 
         self.CAFE_NAME = _cafe_name
         self.Dn = naver_dn()
         self.logger = configure_logger('cls_logger', 'logging_config.json') 
@@ -222,6 +227,7 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
         if len(_t):
 
                 self.logger.debug('Next Page Exist')
+
                 return True
 
         else:
@@ -233,7 +239,7 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
             self.switch_to.default_content()
             self.switch_to.frame('cafe_main')
             _t = self.find_element_by_xpath("//div[@class='prev-next']/table[@class='Nnavi']/tbody/tr/td[@class='on']/following-sibling::td/a")
-            self.logger.debug(_t.text)
+            self.logger.info(_t.text)
             _t.click()
         except:
             self.get(self.current_url)
@@ -281,23 +287,26 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
 
         time.sleep(1)
         try:
+
             dn_box = self.find_element_by_xpath(_txt_dn_box)
-        except NoSuchElementException :
-           logging.error('Download 게시물이 아닙니다.') 
+        except NoSuchElementException  :
+           logging.error(str(self.__get_title__())+' :Download 게시물이 아닙니다.')
 
-        self.find_element_by_xpath(_txt_dn_arrow).click()
-        time.sleep(1) 
-        _links_ = self.find_elements_by_xpath(_txt_dn_links)
-        _files_ = self.find_elements_by_xpath(_txt_files)
-        time.sleep(1)
+        else:
 
-        _dn_links = [i.get_attribute('href') for i in _links_]
-        _dn_files = [i.text for i in _files_]
+            self.find_element_by_xpath(_txt_dn_arrow).click()
+            time.sleep(1) 
+            _links_ = self.find_elements_by_xpath(_txt_dn_links)
+            _files_ = self.find_elements_by_xpath(_txt_files)
+            time.sleep(1)
 
-        # Close download file box
-        self.find_element_by_xpath(_txt_dn_close).click()
-        time.sleep(1) 
-        return list(zip(_dn_links, _dn_files))
+            _dn_links = [i.get_attribute('href') for i in _links_]
+            _dn_files = [i.text for i in _files_]
+
+            # Close download file box
+            self.find_element_by_xpath(_txt_dn_close).click()
+            time.sleep(1) 
+            return list(zip(_dn_links, _dn_files))
 
 
     def __insert_youtube_linksFile__(self, _fname):
@@ -353,6 +362,7 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
         Download all files in open page
         and return the list of FILES and TITLE
         '''
+        
         _lst_files = self.__get_download_file_nameNlinks__()
         _title_  = self.__get_title__()
         self.switch_to_default_content()
