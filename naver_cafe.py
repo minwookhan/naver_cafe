@@ -286,27 +286,28 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
         self.logger.debug("getting nameNlinks")
 
         time.sleep(1)
-        try:
+        # try:
 
-            dn_box = self.find_element_by_xpath(_txt_dn_box)
-        except NoSuchElementException  :
-           logging.error(str(self.__get_title__())+' :Download 게시물이 아닙니다.')
+        #     dn_box = self.find_element_by_xpath(_txt_dn_box)
+        # except NoSuchElementException  :
+        #    logging.error(str(self.__get_title__())+' :Download 게시물이 아닙니다.')
 
-        else:
+        if not self.__check_exists_by_xpath__(_txt_dn_box):
+            raise NoSuchElementException("this hasn't DOWNLOAD FILED") 
 
-            self.find_element_by_xpath(_txt_dn_arrow).click()
-            time.sleep(1) 
-            _links_ = self.find_elements_by_xpath(_txt_dn_links)
-            _files_ = self.find_elements_by_xpath(_txt_files)
-            time.sleep(1)
+        self.find_element_by_xpath(_txt_dn_arrow).click()
+        time.sleep(1) 
+        _links_ = self.find_elements_by_xpath(_txt_dn_links)
+        _files_ = self.find_elements_by_xpath(_txt_files)
+        time.sleep(1)
 
-            _dn_links = [i.get_attribute('href') for i in _links_]
-            _dn_files = [i.text for i in _files_]
+        _dn_links = [i.get_attribute('href') for i in _links_]
+        _dn_files = [i.text for i in _files_]
 
-            # Close download file box
-            self.find_element_by_xpath(_txt_dn_close).click()
-            time.sleep(1) 
-            return list(zip(_dn_links, _dn_files))
+        # Close download file box
+        self.find_element_by_xpath(_txt_dn_close).click()
+        time.sleep(1) 
+        return list(zip(_dn_links, _dn_files))
 
 
     def __insert_youtube_linksFile__(self, _fname):
@@ -362,44 +363,49 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
         Download all files in open page
         and return the list of FILES and TITLE
         '''
-        
-        _lst_files = self.__get_download_file_nameNlinks__()
-        _title_  = self.__get_title__()
-        self.switch_to_default_content()
-        self.switch_to.frame('cafe_main')
-        _date_ = self.find_element_by_xpath("//td[@class='m-tcol-c date']").text
-        _date_ = re.sub("\.", "-", re.search("[\d]{4}.[\d]{2}.[\d]{2}", _date_).group(0))
+        try: 
+            _lst_files = self.__get_download_file_nameNlinks__()
+        except Exception as E:
+            self.logger.error(E)
 
-
-        if _folder =='./':
-            _folder = './'+ _date_ + '  '+ _title_
         else:
-            if not(_folder.endswith('/')):
 
-                _folder = _folder+ '/' + _date_ + " " + _title_
+            _title_  = self.__get_title__()
+            self.switch_to_default_content()
+            self.switch_to.frame('cafe_main')
+            _date_ = self.find_element_by_xpath("//td[@class='m-tcol-c date']").text
+            _date_ = re.sub("\.", "-", re.search("[\d]{4}.[\d]{2}.[\d]{2}", _date_).group(0))
 
-        if os.path.exists(_folder):
-            pass
-        else:
-            os.makedirs(_folder)
 
-        lst_down_success =[]
-        lst_down_fail = []
-        for i in _lst_files:
-            try:
-                #i[0] : addr of file, i[1] : filename
-                self.logger.info(i[1])
-                self.Dn.save(i[0], _folder+'/'+ i[1])
-                self.__insert_youtube_linksFile__(_folder+'/'+  _title_+'.html')
-                lst_down_success.append(i[1])  #
+            if _folder =='./':
+                _folder = './'+ _date_ + '  '+ _title_
+            else:
+                if not(_folder.endswith('/')):
 
-            except :
-                lst_down_fail.append(i[1])
-                logging.error('\nDownloading error')
-                return lst_down_fail
+                    _folder = _folder+ '/' + _date_ + " " + _title_
 
-        lst_down_success.append(_title_)
-        return lst_down_success
+            if os.path.exists(_folder):
+                pass
+            else:
+                os.makedirs(_folder)
+
+            lst_down_success =[]
+            lst_down_fail = []
+            for i in _lst_files:
+                try:
+                    #i[0] : addr of file, i[1] : filename
+                    self.logger.info(i[1])
+                    self.Dn.save(i[0], _folder+'/'+ i[1])
+                    self.__insert_youtube_linksFile__(_folder+'/'+  _title_+'.html')
+                    lst_down_success.append(i[1])  #
+
+                except :
+                    lst_down_fail.append(i[1])
+                    logging.error('\nDownloading error')
+                    return lst_down_fail
+
+            lst_down_success.append(_title_)
+            return lst_down_success
 
 
     def __check_exists_by_xpath__(self, xpath):
@@ -430,7 +436,11 @@ class naver_dn:
 
     def save(self, url, path_filename):
         print('{} is downloading '.format(path_filename))
-        urlretrieve(url, path_filename, self._reporthook_)
+        try:
+            urlretrieve(url, path_filename, self._reporthook_)
+        except Exception:
+            self.logger.Error('urlretrieve Error')
+            raise Exception("urlretrieve Error")
 
 
 
