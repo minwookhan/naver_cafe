@@ -81,6 +81,11 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
         '''
         Get the name, address of MENU in cafe as DataFrame format 
         '''
+
+        _t = self.find_elements_by_xpath("//div[@class='cafe-menu-tit']/p[@class='down-btn']")
+        for i in _t:
+            i.click()
+
         _b =self.find_elements_by_xpath("//div[@id='cafe-menu']/div[@class='box-g-m']/ul/li/a")
         _lst_menu = []
         for c, i in enumerate(_b):
