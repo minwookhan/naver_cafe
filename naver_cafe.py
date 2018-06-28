@@ -127,10 +127,12 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
             _addr: cafe base 주소
         '''
         self.switch_to.default_content()
+
+#        import ipdb; ipdb.set_trace()
         _id = self.find_element_by_xpath("//div[@id='front-cafe']/a").get_attribute('href')
         _id = re.search('clubid=([0-9]*)', _id).group(1)
         _name = self.find_element_by_xpath("//head/title").text
-        _addr = re.search("http://cafe.naver.com/([\w]*)", self.current_url).group(0)
+        _addr = re.search("https://cafe.naver.com/([\w]*)", self.current_url).group(0)
         return {'cf_name': _name, 'cf_id': _id, 'cf_addr': _addr}
 
 
@@ -326,7 +328,6 @@ class naver_cafe(webdriver.Firefox, webdriver.Chrome, webdriver.Ie):
         _path = "//iframe[contains(@src, 'youtube.com')]"
         _header = "<html><body>"
         _footer = "</body></html>"
-#        import ipdb; ipdb.set_trace()
 
         self.logger.debug("*** Youtube Linke called *****")
         self.switch_to.default_content()
